@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -9,11 +10,10 @@ def register_error_handlers(app: FastAPI) -> None:
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         detail_msg = exc.detail
         if isinstance(detail_msg, list):
-            # If detail is structured, convert to a clean string
             detail_msg = "; ".join(str(d) for d in detail_msg)
         elif not isinstance(detail_msg, str):
             detail_msg = str(detail_msg)
-            
+
         return JSONResponse(
             status_code=exc.status_code,
             content={"message": detail_msg},
@@ -35,6 +35,14 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"message": f"Invalid request data: {summary}"},
+        )
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_exception_handler(request: Request, exc: SQLAlchemyError):
+        # Protect internal database structure and return sanitized message
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"message": "Database service is temporarily unavailable. Please retry shortly."},
         )
 
     @app.exception_handler(Exception)
