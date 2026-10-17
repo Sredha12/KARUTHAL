@@ -55,3 +55,28 @@ This guide provides a step-by-step walkthrough for evaluating the complete Karut
 
 ### Step 15: Cross-Restart Data Persistence
 19. Stop backend process, restart server, query database -> Case records, referrals, and audit trails remain intact.
+
+### Step 16: Privacy-Consented Location Routing & District Case Map (Stage 11)
+20. Submit report with GPS coordinates (`8.73654`, `76.71892`) and `location_consent: true`.
+21. Verify officer retrieves `GET /api/cases/{case_id}/location`:
+    - Coordinates are rounded to 2 decimal places (`8.74`, `76.72`, approx 1 km).
+    - Response clearly indicates `"simulated": true`.
+    - History log writes `location_viewed` without exposing raw coordinates.
+22. Officer queries `GET /api/dashboard/map?district=Thiruvananthapuram` -> Receives standard GeoJSON `FeatureCollection` for mapping without exposing citizen identity.
+23. Cross-district check: Kollam officer (`DCPU-KLM-01`) queries the TVM location -> Immediately rejected with `403 Forbidden`.
+
+### Step 17: Simulated VoIP Call Session Lifecycle (Stage 12)
+24. Reporter uses `reporter_token` from submission to request callback: `POST /api/reports/{case_id}/callback-request` (status: `requested`).
+25. Assigned officer initiates or answers call: `POST /api/cases/{case_id}/calls` (status advances to `ringing`).
+26. Reporter accepts incoming ring: `POST /api/calls/{call_id}/accept` with `X-Reporter-Token` (status advances to `connected`).
+27. Officer requests single-use WebSocket ticket: `POST /api/calls/{call_id}/ws-ticket` (valid for 60 seconds).
+28. Officer connects to `WS /api/calls/{call_id}/signal?ticket=...` for peer signalling.
+29. Either party terminates call: `POST /api/calls/{call_id}/end` -> status advances to `ended`, `duration_seconds` calculated, `notice` verifies simulated prototype status.
+
+---
+
+## Limitations
+
+- **Prototype Demonstration**: Karuthal is a demonstration prototype designed for academic review and technical feasibility evaluation.
+- **No Emergency Services Contact**: The platform does not place calls to 1098, 112, or law enforcement agencies.
+- **Legal Review Pending**: Live implementation mandates formal compliance audits under the Juvenile Justice Act and Digital Personal Data Protection Act (DPDP) 2023.

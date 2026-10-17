@@ -6,11 +6,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.errors import register_error_handlers
-from app.init_db import init_locations
+from app.init_db import ensure_schema_migrations, init_locations
 from app.routers import (
     ai_summary,
     assignments,
     auth,
+    calls,
     cases,
     dashboard,
     emergency,
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
     _ = settings.JWT_SECRET
     # Ensure database tables exist
     Base.metadata.create_all(bind=engine)
+    # Ensure additive migrations for existing tables
+    ensure_schema_migrations(engine)
     # Ensure standard locations exist
     with SessionLocal() as db:
         init_locations(db)
@@ -60,7 +63,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Reporter-Token"],
 )
 
 # Standardized error responses: {"message": "<text>"}
@@ -92,3 +95,4 @@ app.include_router(referrals.router)
 app.include_router(emergency.router)
 app.include_router(history.router)
 app.include_router(ai_summary.router)
+app.include_router(calls.router)

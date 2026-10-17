@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_officer, enforce_district_scope
 from app.models import District, EmergencyCall, Officer, Report
-from app.schemas import CaseStatusUpdate, OfficerDashboardResponse
+from app.schemas import (
+    CaseStatusUpdate,
+    GeoJsonFeatureCollection,
+    OfficerDashboardResponse,
+)
 from app.seed_data import ALLOWED_STATUSES
 from app.services.history_service import record_history
 
@@ -14,6 +18,11 @@ router = APIRouter(prefix="/api", tags=["Officer Dashboard"])
 
 def serialize_report_for_ui(r: Report) -> dict:
     """Exact field format expected by ReportsTable.jsx and OfficerDashboard.jsx."""
+    has_loc = bool(
+        (r.approx_lat is not None and r.approx_lng is not None)
+        or (r.location_text and r.location_text.strip())
+        or (r.ward and r.ward.strip())
+    )
     return {
         "id": r.id,
         "case_id": r.report_id,
@@ -26,6 +35,8 @@ def serialize_report_for_ui(r: Report) -> dict:
         "district": r.district,
         "description": r.description,
         "is_urgent": r.is_urgent,
+        "has_location": has_loc,
+        "routed_district": r.routed_district or r.district,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         "solved_at": r.solved_at.isoformat() if r.solved_at else None,
@@ -104,6 +115,64 @@ def get_officer_dashboard(
         "urgent": urgent_count,
         "reports": [serialize_report_for_ui(r) for r in reports],
         "calls": [serialize_call_for_ui(c) for c in calls],
+    }
+
+
+@router.get("/dashboard/map", response_model=GeoJsonFeatureCollection)
+def get_dashboard_map(
+    district: str = Query(..., description="District jurisdiction name"),
+    db: Session = Depends(get_db),
+    officer: Officer = Depends(get_current_officer),
+):
+    """
+    Stage 11: Return GeoJSON FeatureCollection of consented case locations for the district.
+    Strict privacy guarantees:
+    - Only cases with explicit location consent and approximate coordinates (~1km) are mapped.
+    - Zero reporter-identifying or narrative data is included in feature properties.
+    - Restricted strictly by district scope (403 for unauthorized districts).
+    """
+    # 1. Validate district
+    district_obj = db.query(District).filter(District.name == district).first()
+    if not district_obj:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported district '{district}'. Must be one of Kerala's 14 districts.",
+        )
+
+    # 2. Enforce scope
+    enforce_district_scope(officer, district)
+
+    # 3. Retrieve reports with approximate coordinates
+    reports_with_coords = (
+        db.query(Report)
+        .filter(
+            Report.district == district,
+            Report.approx_lat.is_not(None),
+            Report.approx_lng.is_not(None),
+        )
+        .all()
+    )
+
+    features = []
+    for r in reports_with_coords:
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                # GeoJSON standard specification: [longitude, latitude]
+                "coordinates": [float(r.approx_lng), float(r.approx_lat)],
+            },
+            "properties": {
+                "report_id": r.report_id,
+                "status": r.status,
+                "is_urgent": r.is_urgent,
+                "panchayat": r.panchayat,
+            },
+        })
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
     }
 
 

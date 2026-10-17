@@ -26,6 +26,8 @@ Karuthal is a privacy-conscious, AI-assisted child-protection case-support proto
 | Stage 8 | Emergency Calls & Case History Audit Trail | Completed | 32 / 32 | Active/Acknowledged/Resolved call lifecycle; disclaimer that authorities are not contacted; case history. |
 | Stage 9 | Mock AI Case Summary | Completed | 33 / 33 | Deterministic rule-based summary; unverified label; no external API; disclaimer and human review required. |
 | Stage 10 | Security Hardening, Full Documentation, Frontend Examples & Smoke Test | Completed | 39 / 39 | Security headers, contract mirroring test, docs, ready-to-use React components, live server smoke test passed. |
+| Stage 11 | Reporter Location Routing & District GeoJSON Map | Completed | 45 / 45 | Kerala bounding box, coordinate rounding to ~1km, location_viewed audit, retention cleanup policy. |
+| Stage 12 | VoIP Call Sessions (Simulated & WebRTC Signalling) | Completed | 56 / 56 | In-app voice state machine, ticketed WebSocket relay, reporter token auth, ring timeout, rate limits, live smoke test passed. |
 
 ## Decisions Made
 1. **Locations & Panchayats**: Kerala's 14 official revenue districts are seeded. Panchayats are provided with clearly marked fictional/sample records for development and testing.
@@ -33,3 +35,13 @@ Karuthal is a privacy-conscious, AI-assisted child-protection case-support proto
 3. **Public vs Officer Case Detail**: Public lookup `/api/reports/{case_id}` returns a minimal sanitized view (`case_id`, `status`, `created_at`, `district`). Full sensitive details are restricted to authenticated officers in scope via `/api/cases/{case_id}`.
 4. **Referrals & DCPU Dashboard**: DCPU dashboard response shape is implemented as proposed (`{overview: {...}, referrals: [...]}`) with explicit documentation for teammate sign-off.
 5. **Rate Limiting**: Auth throttling is handled in-memory per login identifier (5 failures / 15 minutes) and noted as a prototype limitation.
+6. **Location Privacy**: GPS coordinates rounded to 2 decimal places (~1 km) server-side prior to storage; dropped if consent is not granted; subject to a 90-day retention cleanup.
+7. **VoIP Simulation & Zero Audio Recording**: Call sessions are simulated by default with WebRTC signalling option for demo; audio is never recorded, intercepted, or saved.
+
+---
+
+## Limitations
+
+- **Experimental Prototype**: Karuthal is an academic and technical prototype built for authorized human decision-making support.
+- **Not Cleared for Production**: Requires formal legal reviews under Indian child welfare laws (POCSO, Juvenile Justice Act) and data protection statutes (DPDP Act 2023).
+- **Simulated External Helplines**: System does not dispatch police, Childline (1098), or emergency services (112).

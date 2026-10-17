@@ -6,8 +6,10 @@ from app.database import get_db
 from app.deps import get_optional_officer, enforce_district_scope
 from app.models import District, Officer, Panchayat, Report
 from app.schemas import ReportCreate
+from app.security import hash_password
 from app.seed_data import ALLOWED_CATEGORIES
 from app.services.history_service import record_history
+from app.services.location_service import validate_kerala_coordinates
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
@@ -37,6 +39,12 @@ def serialize_report(r: Report, is_minimal: bool = False) -> dict:
             "privacy_notice": "Public view restricted to status verification only. No personal details are stored or disclosed.",
         }
 
+    has_loc = bool(
+        (r.approx_lat is not None and r.approx_lng is not None)
+        or (r.location_text and r.location_text.strip())
+        or (r.ward and r.ward.strip())
+    )
+
     return {
         "case_id": r.report_id,
         "report_id": r.report_id,
@@ -49,6 +57,8 @@ def serialize_report(r: Report, is_minimal: bool = False) -> dict:
         "description": r.description,
         "status": r.status,
         "is_urgent": r.is_urgent,
+        "has_location": has_loc,
+        "routed_district": r.routed_district or r.district,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         "solved_at": r.solved_at.isoformat() if r.solved_at else None,
@@ -87,10 +97,24 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
             detail=f"Panchayat '{report_in.panchayat}' does not belong to district '{report_in.district}'.",
         )
 
-    # 4. Generate unique Case ID with collision retry
+    # 4. Validate geographic coordinates against Kerala boundaries
+    validate_kerala_coordinates(report_in.approx_lat, report_in.approx_lng)
+
+    # Privacy rule: coordinates stored ONLY if explicit consent granted, rounded to 2 decimal places (~1 km)
+    stored_lat: float | None = None
+    stored_lng: float | None = None
+    if report_in.location_consent and report_in.approx_lat is not None and report_in.approx_lng is not None:
+        stored_lat = round(float(report_in.approx_lat), 2)
+        stored_lng = round(float(report_in.approx_lng), 2)
+
+    # 5. Generate unique Case ID with collision retry
     case_id = generate_unique_report_id(db)
 
-    # 5. Safe atomic creation
+    # 6. Generate anonymous reporter callback token (Stage 12)
+    reporter_token = secrets.token_urlsafe(24)
+    reporter_token_hash = hash_password(reporter_token)
+
+    # 7. Safe atomic creation
     try:
         report_db = Report(
             report_id=case_id,
@@ -102,6 +126,14 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
             description=report_in.description,
             status="Submitted",
             is_urgent=report_in.is_urgent,
+            location_text=report_in.location_text.strip() if report_in.location_text else None,
+            ward=report_in.ward.strip() if report_in.ward else None,
+            approx_lat=stored_lat,
+            approx_lng=stored_lng,
+            location_consent=report_in.location_consent,
+            location_source=report_in.location_source,
+            routed_district=district_obj.name,
+            reporter_token_hash=reporter_token_hash,
         )
         db.add(report_db)
         db.flush()
@@ -129,6 +161,7 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
     return {
         "message": "Demo report submitted successfully",
         "report": serialized,
+        "reporter_token": reporter_token,
     }
 
 

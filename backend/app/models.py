@@ -3,6 +3,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -61,6 +62,7 @@ class Officer(Base):
     assignments_received = relationship("Assignment", back_populates="assigned_to", foreign_keys="Assignment.assigned_to_id")
     assignments_created = relationship("Assignment", back_populates="assigned_by", foreign_keys="Assignment.assigned_by_id")
     field_visits = relationship("FieldVisit", back_populates="officer")
+    call_sessions = relationship("CallSession", back_populates="officer")
 
 
 class Report(Base):
@@ -85,12 +87,25 @@ class Report(Base):
     solved_at = Column(DateTime(timezone=True), nullable=True)
     solved_by = Column(Integer, ForeignKey("officers.id", ondelete="SET NULL"), nullable=True)
 
+    # Stage 11 Location routing additions
+    location_text = Column(String(200), nullable=True)
+    ward = Column(String(50), nullable=True)
+    approx_lat = Column(Float, nullable=True)
+    approx_lng = Column(Float, nullable=True)
+    location_consent = Column(Boolean, default=False, nullable=False)
+    location_source = Column(String(20), nullable=True)  # typed, device, map_pick
+    routed_district = Column(String(100), index=True, nullable=True)
+
+    # Stage 12 Reporter token hash (never stored in plain text)
+    reporter_token_hash = Column(String(255), nullable=True)
+
     solver = relationship("Officer", back_populates="reports_solved", foreign_keys=[solved_by])
     assignments = relationship("Assignment", back_populates="report", cascade="all, delete-orphan")
     field_visits = relationship("FieldVisit", back_populates="report", cascade="all, delete-orphan")
     referrals = relationship("Referral", back_populates="report", cascade="all, delete-orphan")
     emergency_calls = relationship("EmergencyCall", back_populates="report")
     history = relationship("CaseHistory", back_populates="report", cascade="all, delete-orphan")
+    call_sessions = relationship("CallSession", back_populates="report", cascade="all, delete-orphan")
 
 
 class Assignment(Base):
@@ -168,7 +183,7 @@ class CaseHistory(Base):
     __tablename__ = "case_history"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    entity_type = Column(String(50), nullable=False)  # "report", "case", "emergency_call", "referral"
+    entity_type = Column(String(50), nullable=False)  # "report", "case", "emergency_call", "referral", "call_session"
     entity_id = Column(Integer, index=True, nullable=False)
     report_id = Column(Integer, ForeignKey("reports.id", ondelete="CASCADE"), nullable=True, index=True)
     action = Column(String(100), nullable=False)
@@ -179,6 +194,33 @@ class CaseHistory(Base):
     report = relationship("Report", back_populates="history", foreign_keys=[report_id])
 
 
+class CallSession(Base):
+    """
+    Represents an in-app voice call session between a case officer and an anonymous reporter.
+    No audio, transcripts, or telephone numbers are ever recorded or stored.
+    """
+    __tablename__ = "call_sessions"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    case_id = Column(Integer, ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by = Column(String(20), nullable=False)  # "reporter" | "officer"
+    officer_id = Column(Integer, ForeignKey("officers.id", ondelete="SET NULL"), nullable=True, index=True)
+    status = Column(String(30), default="requested", nullable=False, index=True)
+    # Status lifecycle: requested -> ringing -> connected -> ended; exits: declined, missed, cancelled
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    ringing_at = Column(DateTime(timezone=True), nullable=True)
+    connected_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    end_reason = Column(String(50), nullable=True)  # "normal", "declined", "ring_timeout", "cancelled"
+    duration_seconds = Column(Integer, nullable=True)
+    mode = Column(String(20), default="simulated", nullable=False)  # "simulated" | "webrtc"
+    simulated = Column(Boolean, default=True, nullable=False)
+
+    report = relationship("Report", back_populates="call_sessions")
+    officer = relationship("Officer", back_populates="call_sessions")
+
+
 # Compound indexes for fast district and status querying
 Index("ix_reports_district_status", Report.district, Report.status)
 Index("ix_calls_district_status", EmergencyCall.district, EmergencyCall.status)
+Index("ix_call_sessions_case_status", CallSession.case_id, CallSession.status)

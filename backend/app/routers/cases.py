@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_officer, verify_case_scope, enforce_district_scope
 from app.models import Assignment, CaseHistory, Officer, Report
-from app.schemas import CaseStatusUpdate
+from app.schemas import CaseLocationResponse, CaseStatusUpdate
 from app.seed_data import ALLOWED_STATUSES
 from app.services.history_service import record_history
 
@@ -13,6 +13,11 @@ router = APIRouter(prefix="/api/cases", tags=["Cases"])
 
 
 def serialize_case(r: Report) -> dict:
+    has_loc = bool(
+        (r.approx_lat is not None and r.approx_lng is not None)
+        or (r.location_text and r.location_text.strip())
+        or (r.ward and r.ward.strip())
+    )
     return {
         "id": r.id,
         "case_id": r.report_id,
@@ -27,6 +32,8 @@ def serialize_case(r: Report) -> dict:
         "description": r.description,
         "status": r.status,
         "is_urgent": r.is_urgent,
+        "has_location": has_loc,
+        "routed_district": r.routed_district or r.district,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         "solved_at": r.solved_at.isoformat() if r.solved_at else None,
@@ -123,6 +130,54 @@ def get_case_detail(
 
     verify_case_scope(report, officer, db)
     return serialize_case(report)
+
+
+@router.get("/{case_id}/location", response_model=CaseLocationResponse)
+def get_case_location(
+    case_id: str,
+    db: Session = Depends(get_db),
+    officer: Officer = Depends(get_current_officer),
+):
+    """
+    Retrieve incident location details for authorized officers within district scope.
+    Strict privacy rule: coordinates are rounded to ~1km, and every access logs a
+    'location_viewed' history event without recording coordinates in log text.
+    """
+    report = find_report_by_case_id(case_id, db)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case '{case_id}' not found.",
+        )
+
+    verify_case_scope(report, officer, db)
+
+    # Log audit event for location access (never log coordinates in event text)
+    record_history(
+        db=db,
+        entity_type="case",
+        entity_id=report.id,
+        action="location_viewed",
+        details=f"Officer {officer.officer_code} viewed incident area",
+        actor_officer_id=officer.id,
+        report_id=report.id,
+    )
+    db.commit()
+
+    return {
+        "case_id": report.report_id,
+        "district": report.district,
+        "panchayat": report.panchayat,
+        "ward": report.ward,
+        "location_text": report.location_text,
+        "approx_lat": report.approx_lat,
+        "approx_lng": report.approx_lng,
+        "location_consent": report.location_consent,
+        "location_source": report.location_source,
+        "routed_district": report.routed_district or report.district,
+        "simulated": True,
+        "notice": "SIMULATED PROTOTYPE. Coordinates are rounded to ~1km for privacy.",
+    }
 
 
 @router.patch("/{case_id}/status")

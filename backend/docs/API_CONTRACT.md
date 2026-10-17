@@ -31,6 +31,18 @@
 | `PATCH` | `/api/emergency/{id}` | Numeric DB ID alert status patch | Implemented (Frontend) | Bearer Token | District Scoped |
 | `GET` | `/api/cases/{case_id}/history`| Chronological privacy-preserving audit trail | Implemented | Bearer Token | Scoped |
 | `POST` | `/api/cases/{case_id}/ai-summary` | Deterministic decision-support AI summary | Implemented | Bearer Token (DCPU/Admin)| District Scoped |
+| `GET` | `/api/cases/{case_id}/location` | Consented case location (simulated prototype) | Implemented (Stage 11) | Bearer Token | District Scoped |
+| `GET` | `/api/dashboard/map` | District GeoJSON map of consented cases | Implemented (Stage 11) | Bearer Token | District Scoped |
+| `POST` | `/api/reports/{id}/callback-request` | Anonymous reporter requests voice callback | Implemented (Stage 12) | `X-Reporter-Token` Header | Case Token Scoped |
+| `GET` | `/api/cases/{case_id}/calls` | List voice call sessions for case | Implemented (Stage 12) | Bearer Token | District Scoped |
+| `POST` | `/api/cases/{case_id}/calls` | Officer starts/answers voice session | Implemented (Stage 12) | Bearer Token | District Scoped |
+| `GET` | `/api/calls/ice-config` | STUN/TURN ICE config for WebRTC path | Implemented (Stage 12) | Optional Bearer | Participant / Officer |
+| `GET` | `/api/calls/{call_id}` | Participant call status inspection | Implemented (Stage 12) | Bearer or `X-Reporter-Token` | Participant Scoped |
+| `POST` | `/api/calls/{call_id}/accept` | Accept incoming ringing session | Implemented (Stage 12) | Bearer or `X-Reporter-Token` | Participant Scoped |
+| `POST` | `/api/calls/{call_id}/decline` | Decline incoming ringing session | Implemented (Stage 12) | Bearer or `X-Reporter-Token` | Participant Scoped |
+| `POST` | `/api/calls/{call_id}/end` | Terminate session & calculate duration | Implemented (Stage 12) | Bearer or `X-Reporter-Token` | Participant Scoped |
+| `POST` | `/api/calls/{call_id}/ws-ticket` | Single-use 60s WebSocket auth ticket | Implemented (Stage 12) | Bearer or `X-Reporter-Token` | Participant Scoped |
+| `WS` | `/api/calls/{call_id}/signal` | Real-time WebRTC/simulated signalling relay | Implemented (Stage 12) | Query Ticket (`ticket=...`) | Participant Scoped |
 
 ---
 
@@ -132,3 +144,95 @@ Polled by the frontend dashboard every 3 seconds.
   ```
 - **Response (200 OK):** Updated emergency call object.
 - **Conflict (409 Conflict):** If status is already `Resolved`.
+
+---
+
+### 5. Consented Case Location: `GET /api/cases/{case_id}/location`
+- **Headers:** `Authorization: Bearer <officer_token>`
+- **Response (200 OK):**
+  ```json
+  {
+    "district": "Thiruvananthapuram",
+    "panchayat": "Varkala",
+    "ward": "Ward 3",
+    "location_text": "Near the primary health sub-centre",
+    "approx_lat": 8.74,
+    "approx_lng": 76.72,
+    "location_consent": true,
+    "location_source": "device",
+    "simulated": true
+  }
+  ```
+- **Audit:** Records `location_viewed` in case history (never logging coordinates).
+
+---
+
+### 6. District Case Map (GeoJSON): `GET /api/dashboard/map?district=Thiruvananthapuram`
+- **Headers:** `Authorization: Bearer <officer_token>`
+- **Response (200 OK):**
+  ```json
+  {
+    "type": "FeatureCollection",
+    "district": "Thiruvananthapuram",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [76.72, 8.74]
+        },
+        "properties": {
+          "report_id": "KAR-8B2A91F4",
+          "status": "Submitted",
+          "is_urgent": true,
+          "panchayat": "Varkala"
+        }
+      }
+    ],
+    "simulated": true
+  }
+  ```
+
+---
+
+### 7. VoIP Call Sessions: Lifecycle & Signalling
+- **Callback Request:** `POST /api/reports/{case_id}/callback-request`
+  - **Header:** `X-Reporter-Token: <token_from_report_creation>`
+  - **Response (201 Created):**
+    ```json
+    {
+      "call": {
+        "id": 12,
+        "case_id": 105,
+        "report_id": "KAR-8B2A91F4",
+        "requested_by": "reporter",
+        "status": "requested",
+        "simulated": true,
+        "notice": "Simulated prototype call. No real helpline or authority is contacted."
+      },
+      "simulated": true,
+      "notice": "Simulated prototype call. No real helpline or authority is contacted."
+    }
+    ```
+- **Officer Initiate/Answer Call:** `POST /api/cases/{case_id}/calls`
+  - **Headers:** `Authorization: Bearer <token>`
+  - **Body:** `{"override_solved": false}`
+  - **Response (201 Created / 200 OK):** Transitions to `ringing`.
+- **Accept Call:** `POST /api/calls/{call_id}/accept`
+  - **Headers:** `Authorization: Bearer <token>` OR `X-Reporter-Token: <token>`
+  - **Response (200 OK):** Transitions to `connected`.
+- **End Call:** `POST /api/calls/{call_id}/end`
+  - **Response (200 OK):** Transitions to `ended` with computed `duration_seconds`.
+- **Single-Use WebSocket Ticket:** `POST /api/calls/{call_id}/ws-ticket`
+  - **Response (200 OK):** `{"ticket": "...", "expires_in": 60, "simulated": true}`
+- **Signalling Channel:** `WS /api/calls/{call_id}/signal?ticket=<ticket>`
+  - Relays WebRTC/simulated JSON peer-to-peer between the 2 participants only.
+
+---
+
+## Limitations
+
+1. **Prototype Decision-Support System**: Karuthal is an academic and technical prototype intended exclusively to demonstrate assistive tools for authorized personnel. It is not approved for live deployment.
+2. **Not Legally Compliant**: Real deployment in India requires comprehensive legal reviews under the Juvenile Justice (Care and Protection of Children) Act, POCSO Act, Digital Personal Data Protection Act (DPDP), and relevant state welfare regulations.
+3. **Simulated Telephony and Audio**: The system does not contact emergency helplines (1098, 112) or police dispatch. Voice call sessions are simulated or WebRTC signalling demonstrations. No voice audio, recording, or audio interception is stored.
+4. **Security & Cryptography**: In-memory rate limiting and single-server WebSocket relays require distributed infrastructure (Redis, Redis pub/sub) and a rigorous third-party penetration test and security audit before processing real data.

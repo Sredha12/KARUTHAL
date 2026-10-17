@@ -262,3 +262,130 @@ All errors consistently return `{"message": "<friendly error description>"}`. Ne
     ]
   }
   ```
+
+---
+
+## 10. Reporter Location Picker & Consent (Stage 11)
+### `POST /api/reports`
+When the citizen submits a report, you can optionally include location text, ward, and coordinates with explicit consent:
+- **Request Body Fields (Optional):**
+  ```json
+  {
+    "district": "Thiruvananthapuram",
+    "panchayat": "Varkala",
+    "category": "Neglect",
+    "description": "Child observed unattended near market.",
+    "location_text": "Near the primary health sub-centre",
+    "ward": "Ward 3",
+    "approx_lat": 8.73654,
+    "approx_lng": 76.71892,
+    "location_consent": true,
+    "location_source": "device"
+  }
+  ```
+- **Response includes `reporter_token` (Returned ONCE only):**
+  ```json
+  {
+    "message": "Demo report submitted successfully",
+    "reporter_token": "aBcD123_456XYZ...",
+    "report": {
+      "case_id": "KAR-8B2A91F4",
+      "routed_district": "Thiruvananthapuram",
+      "has_location": true
+    }
+  }
+  ```
+  > **Note**: Save `reporter_token` in `sessionStorage` or local state so the citizen can request a simulated voice callback.
+
+---
+
+## 11. Officer Location Panel & District Case Map (Stage 11)
+### `GET /api/cases/{case_id}/location`
+- **Header:** `Authorization: Bearer <officer_token>`
+- **Response (200 OK):**
+  ```json
+  {
+    "district": "Thiruvananthapuram",
+    "panchayat": "Varkala",
+    "ward": "Ward 3",
+    "location_text": "Near the primary health sub-centre",
+    "approx_lat": 8.74,
+    "approx_lng": 76.72,
+    "location_consent": true,
+    "location_source": "device",
+    "simulated": true
+  }
+  ```
+
+### `GET /api/dashboard/map?district=Thiruvananthapuram`
+- Returns a standard GeoJSON `FeatureCollection` for Leaflet / MapLibre:
+  ```json
+  {
+    "type": "FeatureCollection",
+    "district": "Thiruvananthapuram",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": { "type": "Point", "coordinates": [76.72, 8.74] },
+        "properties": {
+          "report_id": "KAR-8B2A91F4",
+          "status": "Submitted",
+          "is_urgent": true,
+          "panchayat": "Varkala"
+        }
+      }
+    ],
+    "simulated": true
+  }
+  ```
+
+---
+
+## 12. VoIP Voice Call Sessions (Stage 12)
+
+### A. Citizen Requests Callback
+- **Endpoint:** `POST /api/reports/{case_id}/callback-request`
+- **Header:** `X-Reporter-Token: <saved_token>`
+- **Response (201 Created):**
+  ```json
+  {
+    "call": {
+      "id": 1,
+      "case_id": 105,
+      "report_id": "KAR-8B2A91F4",
+      "requested_by": "reporter",
+      "status": "requested",
+      "simulated": true,
+      "notice": "Simulated prototype call. No real helpline or authority is contacted."
+    },
+    "simulated": true,
+    "notice": "Simulated prototype call. No real helpline or authority is contacted."
+  }
+  ```
+
+### B. Officer Lists & Starts Calls
+- **List Calls:** `GET /api/cases/{case_id}/calls` (Header: `Authorization: Bearer <token>`)
+- **Start Call:** `POST /api/cases/{case_id}/calls`
+  - Body: `{"override_solved": false}`
+  - Advances call status to `ringing`.
+
+### C. Accept, Decline, and End
+- **Accept:** `POST /api/calls/{call_id}/accept` (Header: Bearer token OR `X-Reporter-Token`) -> status: `connected`
+- **Decline:** `POST /api/calls/{call_id}/decline` -> status: `declined`
+- **End:** `POST /api/calls/{call_id}/end` -> status: `ended` (duration calculated) or `cancelled`
+
+### D. WebSocket Signalling Flow
+1. Fetch single-use ticket: `POST /api/calls/{call_id}/ws-ticket` (Header: Bearer token OR `X-Reporter-Token`)
+   - Returns: `{"ticket": "...", "expires_in": 60, "simulated": true}`
+2. Connect WebSocket: `ws://127.0.0.1:8000/api/calls/{call_id}/signal?ticket=<ticket>`
+3. Exchange JSON payloads (`peer_joined`, `offer`, `answer`, `ice`, `peer_disconnected`).
+   - In simulated mode: triggers UI ringing/connected states.
+   - In WebRTC mode: connect peer connection with ICE servers from `GET /api/calls/ice-config`.
+
+---
+
+## Limitations
+
+- **Prototype Only**: Built solely for functional demonstrations and human review.
+- **No Real Helplines**: Never calls emergency numbers (1098, 112) or authorities.
+- **No Audio Recording**: Never records, listens, or stores call audio.

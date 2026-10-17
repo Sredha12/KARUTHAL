@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from dotenv import load_dotenv
@@ -22,6 +23,31 @@ class Settings:
         self.ENFORCE_DISTRICT_SCOPE: bool = enforce_scope_str in ("true", "1", "yes")
         
         self.DEMO_OFFICER_PASSWORD: str | None = os.getenv("DEMO_OFFICER_PASSWORD")
+
+        # Location retention policy
+        try:
+            self.LOCATION_RETENTION_DAYS: int = int(os.getenv("LOCATION_RETENTION_DAYS", "90"))
+        except ValueError:
+            self.LOCATION_RETENTION_DAYS = 90
+
+        # VoIP & Call Session configuration
+        self.VOIP_MODE: str = os.getenv("VOIP_MODE", "simulated").lower()
+        
+        raw_ice = os.getenv("VOIP_ICE_SERVERS", "[]")
+        try:
+            self.VOIP_ICE_SERVERS: list[dict] = json.loads(raw_ice)
+        except Exception:
+            self.VOIP_ICE_SERVERS = []
+
+        try:
+            self.VOIP_RING_TIMEOUT_SECONDS: int = int(os.getenv("VOIP_RING_TIMEOUT_SECONDS", "45"))
+        except ValueError:
+            self.VOIP_RING_TIMEOUT_SECONDS = 45
+
+        try:
+            self.VOIP_MAX_CALLS_PER_CASE_PER_DAY: int = int(os.getenv("VOIP_MAX_CALLS_PER_CASE_PER_DAY", "5"))
+        except ValueError:
+            self.VOIP_MAX_CALLS_PER_CASE_PER_DAY = 5
 
     @property
     def JWT_SECRET(self) -> str:
