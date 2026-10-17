@@ -77,9 +77,6 @@ export default function PublicReport() {
       .then((data) => {
         if (Array.isArray(data)) {
           setDistricts(data);
-          if (data.length > 0) {
-            setDistrict(data[0].name);
-          }
         }
       })
       .catch((err) => {
@@ -273,7 +270,7 @@ export default function PublicReport() {
         try {
           sessionStorage.setItem("karuthal_reporter_token", res.reporter_token);
           sessionStorage.setItem(`token_${res.report?.case_id || res.report?.report_id}`, res.reporter_token);
-        } catch {}
+        } catch { }
       }
     } catch (err) {
       setErrorMessage(err.message || "Failed to submit report. Please try again.");
@@ -316,6 +313,7 @@ export default function PublicReport() {
     setSuccessData(null);
     setDescription("");
     setLocationText("");
+    setDistrict("");
     setApproxTime("");
     handleRemovePhoto();
     setImmediateDanger(null);
@@ -670,24 +668,40 @@ export default function PublicReport() {
               />
             </div>
 
-            {/* Field 5: District (Required, populated from backend, NO panchayat) */}
+            {/* Field 5: District (Typeable with suggestions for all 14 Kerala districts) */}
             <div className="form-group">
-              <label htmlFor="concern-district" className="form-label form-label-required">
+              <label htmlFor="district" className="form-label form-label-required">
                 {t("district")}
               </label>
-              <select
-                id="concern-district"
+              <input
+                id="district"
+                type="text"
+                name="district"
                 className="form-control"
+                placeholder={lang === "ml" ? "ജില്ല ടൈപ്പ് ചെയ്യുക അല്ലെങ്കിൽ തിരഞ്ഞെടുക്കുക" : "Type or select your district"}
+                list="kerala-districts"
+                autoComplete="off"
                 value={district}
                 onChange={(e) => setDistrict(e.target.value)}
                 required
-              >
-                {districts.map((d) => (
-                  <option key={d.id || d.name} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+              />
+
+              <datalist id="kerala-districts">
+                <option value="Thiruvananthapuram" />
+                <option value="Kollam" />
+                <option value="Pathanamthitta" />
+                <option value="Alappuzha" />
+                <option value="Kottayam" />
+                <option value="Idukki" />
+                <option value="Ernakulam" />
+                <option value="Thrissur" />
+                <option value="Palakkad" />
+                <option value="Malappuram" />
+                <option value="Kozhikode" />
+                <option value="Wayanad" />
+                <option value="Kannur" />
+                <option value="Kasaragod" />
+              </datalist>
             </div>
 
             {/* Field 6: Approximate time */}
