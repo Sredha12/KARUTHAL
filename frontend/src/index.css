@@ -1,0 +1,126 @@
+/* Bridge styles and Officer UI utilities using Theme tokens */
+:root {
+  --primary: var(--teal-700);
+  --primary-hover: var(--teal-800);
+  --primary-light: #eaf3f1;
+  --text-main: var(--text);
+  --text-muted: var(--muted);
+  --bg-page: var(--bg);
+  --bg-card: var(--card);
+  --border-color: var(--line);
+  --border-focus: var(--teal-700);
+  --radius: var(--radius-card);
+}
+
+/* Card */
+.card {
+  background-color: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Alerts */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius-input);
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+  line-height: 1.45;
+}
+
+.alert-danger {
+  background-color: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.alert-success {
+  background-color: #e6f4ea;
+  border: 1px solid #a8dab5;
+  color: #137333;
+}
+
+.alert-info {
+  background-color: #edf5f3;
+  border: 1px solid #bfdbd8;
+  color: var(--teal-900);
+}
+
+/* Tables */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+th {
+  background-color: #f7faf9;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--line);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+td {
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+tr:hover td {
+  background-color: #f4f8f7;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 12px;
+}
+
+.badge-urgent {
+  background-color: var(--danger);
+  color: #ffffff;
+}
+
+.badge-solved {
+  background-color: #e6f4ea;
+  color: #137333;
+}
+
+.badge-pending {
+  background-color: var(--gold-soft);
+  color: #5a4505;
+}
+
+.badge-location {
+  background-color: rgba(201, 162, 39, 0.15);
+  color: #735c00;
+  border: 1px solid var(--gold);
+}
+
+.btn-sm {
+  min-height: 34px !important;
+  padding: 4px 12px !important;
+  font-size: 0.82rem !important;
+}
+
+.btn-success {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #059669;
+}
