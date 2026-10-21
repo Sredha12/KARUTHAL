@@ -98,3 +98,19 @@ def test_public_report_minimal_view_vs_officer_full_view(
     assert forbidden_res.status_code == 403
     assert "message" in forbidden_res.json()
     assert "district scope" in forbidden_res.json()["message"]
+
+
+def test_public_report_without_panchayat_succeeds(client):
+    payload = {
+        "district": "Thiruvananthapuram",
+        "category": "Neglect",
+        "description": "Report submitted without any panchayat specification.",
+        "is_urgent": False,
+    }
+    res = client.post("/api/reports", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert "report" in data
+    assert data["report"]["district"] == "Thiruvananthapuram"
+    assert "reporter_token" in data
+

@@ -29,7 +29,7 @@ class PanchayatRead(BaseModel):
 
 class ReportCreate(BaseModel):
     district: str = Field(min_length=2, max_length=100)
-    panchayat: str = Field(min_length=2, max_length=100)
+    panchayat: str | None = Field(default=None, max_length=100)
     category: str = Field(min_length=2, max_length=100)
     description: str = Field(min_length=10, max_length=2000)
     is_urgent: bool = Field(default=False)
@@ -48,7 +48,7 @@ class ReportRead(BaseModel):
     case_id: str
     report_id: str
     district: str
-    panchayat: str
+    panchayat: str | None = None
     category: str
     description: str
     status: str

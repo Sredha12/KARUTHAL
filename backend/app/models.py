@@ -77,7 +77,7 @@ class Report(Base):
     district_id = Column(Integer, ForeignKey("districts.id", ondelete="RESTRICT"), nullable=True, index=True)
     panchayat_id = Column(Integer, ForeignKey("panchayats.id", ondelete="SET NULL"), nullable=True, index=True)
     district = Column(String(100), index=True, nullable=False)
-    panchayat = Column(String(100), nullable=False)
+    panchayat = Column(String(100), nullable=True, default="")
     category = Column(String(100), nullable=False)
     description = Column(Text, nullable=False)
     status = Column(String(50), index=True, default="Submitted", nullable=False)

@@ -82,20 +82,22 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
             detail=f"District '{report_in.district}' is not recognized. Must be one of Kerala's 14 revenue districts.",
         )
 
-    # 3. Validate Panchayat exists and belongs to the specified District
-    panchayat_obj = (
-        db.query(Panchayat)
-        .filter(
-            Panchayat.district_id == district_obj.id,
-            Panchayat.name == report_in.panchayat,
+    # 3. Validate Panchayat exists and belongs to the specified District (if provided)
+    panchayat_obj = None
+    if report_in.panchayat and report_in.panchayat.strip():
+        panchayat_obj = (
+            db.query(Panchayat)
+            .filter(
+                Panchayat.district_id == district_obj.id,
+                Panchayat.name == report_in.panchayat.strip(),
+            )
+            .first()
         )
-        .first()
-    )
-    if not panchayat_obj:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Panchayat '{report_in.panchayat}' does not belong to district '{report_in.district}'.",
-        )
+        if not panchayat_obj:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Panchayat '{report_in.panchayat}' does not belong to district '{report_in.district}'.",
+            )
 
     # 4. Validate geographic coordinates against Kerala boundaries
     validate_kerala_coordinates(report_in.approx_lat, report_in.approx_lng)
@@ -119,9 +121,9 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
         report_db = Report(
             report_id=case_id,
             district_id=district_obj.id,
-            panchayat_id=panchayat_obj.id,
+            panchayat_id=panchayat_obj.id if panchayat_obj else None,
             district=district_obj.name,
-            panchayat=panchayat_obj.name,
+            panchayat=panchayat_obj.name if panchayat_obj else (report_in.panchayat.strip() if report_in.panchayat else ""),
             category=report_in.category,
             description=report_in.description,
             status="Submitted",
